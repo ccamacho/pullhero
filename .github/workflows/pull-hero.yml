@@ -11,20 +11,21 @@ jobs:
       contents: read
     if: |
       github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/review')
+      startsWith(github.event.comment.body, '/review') &&
+      github.repository == 'ccamacho/pullhero'
     steps:
-      - name: Checkout Base Repository (Safe for Forks)
+      - name: Checkout Original Repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.issue.pull_request.head.ref }}
+          repository: ${{ github.repository }}
 
       - name: Debug Comment Data
         run: |
           echo "Comment body: '${{ github.event.comment.body }}'"
           echo "Comment user: '${{ github.event.comment.user.login }}'"
-          echo "Is this a pull request comment? ${{ github.event.issue.pull_request }}"
+          echo "PR number: ${{ github.event.issue.number }}"
 
       - name: Get Repository Collaborators
         id: check_user
@@ -72,22 +73,31 @@ jobs:
 
       - name: Debug Secrets (Ensure OPENAI_API_KEY is Passed)
         run: |
-          if [[ -z "$OPENAI_API_KEY" ]]; then
-            echo "OPENAI_API_KEY is empty!"
+          echo "🔍 Debugging Secrets..."
+          
+          if [[ -z "${{ secrets.OPENAI_API_KEY }}" ]]; then
+            echo "❌ ERROR: OPENAI_API_KEY is missing in GitHub Secrets!"
           else
-            echo "OPENAI_API_KEY is set. Length: ${#OPENAI_API_KEY}"
+            echo "✅ OPENAI_API_KEY is set in GitHub Secrets."
           fi
-          if [[ -z "$GITHUB_TOKEN" ]]; then
-            echo "GITHUB_TOKEN is empty!"
+
+          if [[ -z "$OPENAI_API_KEY" ]]; then
+            echo "❌ ERROR: OPENAI_API_KEY is NOT set in environment!"
           else
-            echo "GITHUB_TOKEN is set. Length: ${#GITHUB_TOKEN}"
+            echo "✅ OPENAI_API_KEY is set. Length: ${#OPENAI_API_KEY}"
+          fi
+
+          if [[ -z "${{ secrets.GITHUB_TOKEN }}" ]]; then
+            echo "❌ ERROR: GITHUB_TOKEN is missing!"
+          else
+            echo "✅ GITHUB_TOKEN is set. Length: ${#GITHUB_TOKEN}"
           fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run pullhero
-        uses: ./
-        with:
-          api-key: "${{ secrets.OPENAI_API_KEY }}"
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Run Pull Hero
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python pullhero.py
